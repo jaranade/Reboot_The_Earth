@@ -1,4 +1,7 @@
-1. Fire spreads according to the 30-30-30 rule. when temperatures are above 30°C, relative humidity is 30% or lower, and winds are blowing at 30 km/h or higher, 
-fires can burn uncontrollably.
+1. Fire spread model uses fuel type (grass/forest/dense), wind direction (dot product against spread vector), wind speed multiplier, moisture suppression, 
+temperature multiplier, and diagonal falloff. Structures burn slower than dense forest. Water/road act as natural firebreaks.
 
 2. Also take into account ember spotting, based on wind direction.
+
+3. Fire spreads according to the 30-30-30 rule. when temperatures are above 30°C, relative humidity is 30% or lower, and winds are blowing at 30 km/h or higher, 
+fires can burn uncontrollably.
