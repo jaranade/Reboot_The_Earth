@@ -5,3 +5,6 @@ temperature multiplier, and diagonal falloff. Structures burn slower than dense 
 
 3. Fire spreads according to the 30-30-30 rule. when temperatures are above 30°C, relative humidity is 30% or lower, and winds are blowing at 30 km/h or higher, 
 fires can burn uncontrollably.
+
+4. Fire can start from anywhere, not just the corners of the screen. Progressive levels could have a probability distribution over the map describing how likely it 
+is that a fire can start in that region. Designate deeper reds to high probability regions, and diminish radially.
