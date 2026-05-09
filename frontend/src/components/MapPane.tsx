@@ -15,11 +15,37 @@ export interface CircleState {
   radiusM: number
 }
 
-function MapFlyTo({ target }: { target: [number, number] | null }) {
+// Scale factor: bounding box is SCALE × circle diameter on each side.
+// At SCALE=2, circle diameter ≈ 50% of each viewport dimension → ~¼ of visible area.
+const QUARTER_SCALE = 2
+
+function circleBounds(lat: number, lng: number, radiusM: number, scale = 1) {
+  const latDelta = (scale * radiusM) / 111320
+  const lngDelta = (scale * radiusM) / (111320 * Math.cos((lat * Math.PI) / 180))
+  return L.latLngBounds([lat - latDelta, lng - lngDelta], [lat + latDelta, lng + lngDelta])
+}
+
+export interface FlyToTarget {
+  center: [number, number]
+  radiusM: number
+}
+
+function MapFlyTo({ target }: { target: FlyToTarget | null }) {
   const map = useMap()
   useEffect(() => {
-    if (target) map.flyTo(target, map.getZoom())
+    if (!target) return
+    const [lat, lng] = target.center
+    map.flyToBounds(circleBounds(lat, lng, target.radiusM, QUARTER_SCALE), { animate: true, duration: 1 })
   }, [target, map])
+  return null
+}
+
+function MapInitView({ center, radiusM }: { center: [number, number]; radiusM: number }) {
+  const map = useMap()
+  useEffect(() => {
+    const [lat, lng] = center
+    map.fitBounds(circleBounds(lat, lng, radiusM, QUARTER_SCALE))
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   return null
 }
 
@@ -130,13 +156,13 @@ function FarmCircle({ center, radiusM, onCenterChange, onRadiusChange }: FarmCir
 
 interface MapPaneProps {
   circle: CircleState
-  flyToCenter: [number, number] | null
+  flyTo: FlyToTarget | null
   onCenterChange: (c: [number, number]) => void
   onRadiusChange: (r: number) => void
 }
 
-export default function MapPane({ circle, flyToCenter, onCenterChange, onRadiusChange }: MapPaneProps) {
-  const acres = ((Math.PI * circle.radiusM ** 2) / 4046.856).toFixed(1)
+export default function MapPane({ circle, flyTo, onCenterChange, onRadiusChange }: MapPaneProps) {
+  const acres = Math.round((Math.PI * circle.radiusM ** 2) / 4046.856)
 
   return (
     <div className="relative h-full w-full">
@@ -149,7 +175,8 @@ export default function MapPane({ circle, flyToCenter, onCenterChange, onRadiusC
           url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
           attribution="Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
         />
-        <MapFlyTo target={flyToCenter} />
+        <MapInitView center={circle.center} radiusM={circle.radiusM} />
+        <MapFlyTo target={flyTo} />
         <FarmCircle
           center={circle.center}
           radiusM={circle.radiusM}

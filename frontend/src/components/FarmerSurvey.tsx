@@ -46,6 +46,7 @@ interface FarmerSurveyProps {
   geoCoordinates: string
   onAddressChange: (addr: string) => void
   onAcresChange: (acres: string) => void
+  preset: SurveyData | null
 }
 
 function Label({ children }: { children: React.ReactNode }) {
@@ -128,7 +129,7 @@ function QuestionBlock({ number, question, children }: { number: number; questio
   )
 }
 
-export default function FarmerSurvey({ onSubmit, geoAddress, geoAddressLoading, geoAcres, geoCoordinates, onAddressChange, onAcresChange }: FarmerSurveyProps) {
+export default function FarmerSurvey({ onSubmit, geoAddress, geoAddressLoading, geoAcres, geoCoordinates, onAddressChange, onAcresChange, preset }: FarmerSurveyProps) {
   const [form, setForm] = useState<SurveyData>({
     address: '',
     coordinates: '',
@@ -155,6 +156,29 @@ export default function FarmerSurvey({ onSubmit, geoAddress, geoAddressLoading, 
   useEffect(() => { setForm((prev) => ({ ...prev, address: geoAddress })) }, [geoAddress])
   useEffect(() => { setForm((prev) => ({ ...prev, acreage: geoAcres })) }, [geoAcres])
   useEffect(() => { setForm((prev) => ({ ...prev, coordinates: geoCoordinates })) }, [geoCoordinates])
+  useEffect(() => { if (preset) setForm(preset) }, [preset])
+
+  const handleClear = () => {
+    setForm({
+      address: geoAddress,
+      coordinates: geoCoordinates,
+      acreage: geoAcres,
+      crops: [],
+      cropsOther: '',
+      growthStage: '',
+      nearHarvest: '',
+      hasLivestock: '',
+      livestockType: '',
+      animalCount: '',
+      relocationSite: '',
+      irrigationSource: '',
+      defensiveIrrigation: '',
+      structures: [],
+      structuresOther: '',
+      hasWorkers: '',
+      workerDetails: '',
+    })
+  }
 
   const showLivestock = form.hasLivestock === 'Yes'
   const showWorkerDetails = form.hasWorkers === 'Yes'
@@ -166,9 +190,18 @@ export default function FarmerSurvey({ onSubmit, geoAddress, geoAddressLoading, 
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-4">
-      <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
-        <h1 className="text-base font-bold text-orange-800 tracking-tight">FIRESIGHT FARMER PROFILE</h1>
-        <p className="text-xs text-orange-600 mt-0.5">Complete the survey below to receive a personalized fire risk assessment.</p>
+      <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-base font-bold text-orange-800 tracking-tight">FIRESIGHT FARMER PROFILE</h1>
+          <p className="text-xs text-orange-600 mt-0.5">Complete the survey below to receive a personalized fire risk assessment.</p>
+        </div>
+        <button
+          type="button"
+          onClick={handleClear}
+          className="shrink-0 text-xs text-orange-500 hover:text-orange-700 border border-orange-300 hover:border-orange-500 rounded-lg px-2.5 py-1.5 transition-colors"
+        >
+          Clear
+        </button>
       </div>
 
       {/* Q1 — pre-filled from map center; manual entry triggers forward geocode */}
