@@ -9,8 +9,54 @@ from app.schemas import FarmProfile, DailyRisk, RecommendationItem
 
 load_dotenv()
 
-# picking our open-source model
 MODEL_NAME = "meta-llama/Meta-Llama-3-8B-Instruct:featherless-ai"
+
+SYSTEM_PROMPT = """You are a Certified Wildfire Risk Assessor with 20 years of experience advising farms in fire-prone regions.
+
+Your job is to generate specific, actionable recommendations based on real environmental data.
+
+Rules you must follow:
+- NEVER give generic advice like "clear vegetation" or "develop an evacuation plan" without tying it to a specific date, measurement, or alert in the data.
+- ALWAYS reference specific numbers: exact dates, FWI scores, distances to fires, VPD values, drought levels.
+- ALWAYS prioritise around the peak risk dates — tell the farmer exactly when to act.
+- If a government weather alert (Red Flag Warning, Heat Advisory) is active, rank-1 must directly respond to it.
+- If fires are detected nearby, include distance and direction in the action.
+- Recommendations must be specific to the crop type and livestock status.
+- ALWAYS explain every technical term in plain English immediately after using it. Write as if talking to a farmer who has never seen a weather report. Examples:
+  - Instead of "VPD of 3.5 kPa" write "VPD (Vapor Pressure Deficit — the gap between how much moisture the air could hold and how much it actually holds; a high VPD means the air is pulling moisture out of plants, leaving them drier and more flammable) of 3.5 kPa, which means vegetation is under extreme drying stress and can ignite from a single spark"
+  - Instead of "FWI score of 28" write "FWI (Fire Weather Index — a 0–100 scale of how dangerous conditions are for fire) of 28, which is in the High range"
+  - Instead of "FRP of 1.2 MW" write "FRP (Fire Radiative Power — a satellite measure of how intensely a fire is burning) of 1.2 MW"
+  - Instead of "D3 drought" write "D3 Extreme Drought (the second-worst drought category, meaning soil is critically dry)"
+  - Instead of "kPa" write "kPa (kilopascals — a unit of pressure used to measure atmospheric dryness)"
+- Return valid JSON only — no markdown, no explanation outside the array."""
+
+CROP_CONTEXT = {
+    "almonds": "Almond orchards: hull split season (Jul–Sep) leaves highly flammable debris. Drip irrigation lines melt under fire and cut off water supply. Windrow burning is a major ignition source. Nuts on the ground are a fuel bed.",
+    "grapes": "Vineyards: dry vine canes and trellis wires conduct heat. Leaf litter burns rapidly between rows. Harvest equipment sparks are a real ignition risk during dry conditions. Smoke exposure damages wine quality even without direct fire.",
+    "hay": "Hay fields: among the highest fire spread risk of any crop — dry hay burns at 5–8 km/h. Baled hay stored near structures is an extreme hazard. Harvesting equipment is a leading ignition source.",
+    "wheat": "Wheat: extremely flammable when ripe and dry. Combines can ignite fires via sparks. Large open acreage allows unchecked fire spread.",
+    "corn": "Corn: standing dry stalks burn readily and block visibility for evacuation. Large open fields allow fast fire spread.",
+    "avocado": "Avocado orchards: dense canopy traps embers. Heavily irrigation-dependent — loss of water supply during fire is critical. Slope-planted orchards accelerate uphill fire spread.",
+    "citrus": "Citrus: irrigation-dependent. Smoke and heat cause fruit drop and skin damage even without direct fire. Plastic irrigation lines are a fire hazard.",
+    "cattle": "Cattle/livestock: evacuation of animals is time-critical and requires trailer access routes. Water troughs can act as emergency firebreaks. Pasture fires spread at 5+ km/h.",
+    "sheep": "Sheep: highly vulnerable to smoke inhalation. Require secured pens during nearby fire events. Wool is flammable — avoid crowding near structures.",
+}
+
+
+def _get_crop_context(crop_type: str) -> str:
+    key = crop_type.lower().strip()
+    for k, v in CROP_CONTEXT.items():
+        if k in key or key in k:
+            return v
+    return f"{crop_type.capitalize()}: ensure all irrigation infrastructure and stored equipment are protected from fire approach."
+
+
+def _wind_label(degrees: float | None) -> str:
+    if degrees is None:
+        return "unknown direction"
+    dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+    return f"from the {dirs[round(degrees / 45) % 8]} ({degrees:.0f}°)"
+
 
 def build_llm_prompt(
     farm_profile: FarmProfile,
@@ -20,30 +66,57 @@ def build_llm_prompt(
     risk_trend: str,
     weather_alerts: List[dict],
     nearby_fires: List[dict],
+    fire_approach_alert: dict | None,
+    wind_direction_deg: float | None,
     risk_timeline: List[DailyRisk],
 ) -> str:
     risk_data = [item.model_dump() for item in risk_timeline]
 
-    elevation_note = f"{elevation_m:.0f} m above sea level" if elevation_m is not None else "Unknown"
-
-    fire_summary = (
-        f"{len(nearby_fires)} active satellite fire detection(s) within ~55 km in the last 24 hours."
-        if nearby_fires else "No active fires detected within ~55 km."
+    peak_days = [d for d in risk_data if d["risk_level"] in ("High", "Extreme")]
+    peak_note = (
+        f"PEAK RISK DAYS: {', '.join(d['date'] for d in peak_days)} — farmer must act BEFORE these dates."
+        if peak_days else "No high or extreme risk days in this forecast window."
     )
+
+    max_vpd = max((d["vpd_kpa"] for d in risk_data), default=0)
+    vpd_note = f"Peak VPD this week: {max_vpd} kPa"
+    if max_vpd >= 3.5:
+        vpd_note += " (EXTREME — vegetation at critical ignition risk)"
+    elif max_vpd >= 2.0:
+        vpd_note += " (HIGH — dry vegetation stress)"
+    else:
+        vpd_note += " (moderate)"
+
+    elevation_note = f"{elevation_m:.0f} m" if elevation_m is not None else "unknown"
+    wind_note = _wind_label(wind_direction_deg)
+
+    if fire_approach_alert:
+        fire_alert_section = f"""
+⚠️ FIRE APPROACH ALERT — {fire_approach_alert['level']}
+{fire_approach_alert['message']}
+"""
+    else:
+        fire_alert_section = "No imminent fire approach detected."
 
     if weather_alerts:
         alert_lines = "\n".join(
-            f"- {a['event']} ({a['severity']}): {a['headline']}" for a in weather_alerts
+            f"  - {a['event']} ({a['severity']}): {a['headline']}" for a in weather_alerts
         )
-        alert_summary = f"ACTIVE GOVERNMENT WEATHER ALERTS:\n{alert_lines}"
+        alert_section = f"ACTIVE GOVERNMENT ALERTS:\n{alert_lines}"
     else:
-        alert_summary = "No active government weather alerts for this location."
+        alert_section = "No active government weather alerts."
 
-    peak_days = [d for d in risk_data if d["risk_level"] in ("High", "Extreme")]
-    peak_note = (
-        f"Peak risk days: {', '.join(d['date'] for d in peak_days)}. Farmer must act BEFORE these dates."
-        if peak_days else "No high or extreme risk days forecast."
-    )
+    if nearby_fires:
+        fire_lines = "\n".join(
+            f"  - Fire at ({f['latitude']:.4f}, {f['longitude']:.4f}), FRP: {f['frp']} MW, detected: {f['detection_date']}"
+            for f in nearby_fires
+        )
+        fire_section = f"SATELLITE FIRE DETECTIONS (within ~55 km):\n{fire_lines}"
+    else:
+        fire_section = "No satellite fire detections within 55 km."
+
+    crop_context = _get_crop_context(farm_profile.crop_type)
+    livestock_note = "Livestock present — evacuation routes for animals must be included in any emergency planning." if farm_profile.livestock else "No livestock."
 
     farm_section = (
         f"Detailed farm survey:\n{farm_profile.farm_context}"
@@ -52,42 +125,56 @@ def build_llm_prompt(
     )
 
     return f"""
-You are a wildfire risk advisor for farmers. Use ALL data below to generate exactly 3 ranked, forward-looking action recommendations.
-
 {farm_section}
 
-Elevation: {elevation_note}
-Drought level: {drought_level}
-Vegetation moisture: {ndvi_status}
-7-day risk trend: {risk_trend}
-Nearby fire activity: {fire_summary}
+CROP-SPECIFIC RISK CONTEXT:
+{crop_context}
+{livestock_note}
 
-{alert_summary}
+ENVIRONMENTAL CONDITIONS:
+- Elevation: {elevation_note}
+- Drought level: {drought_level}
+- Vegetation moisture (NDVI proxy): {ndvi_status}
+- {vpd_note}
+- Wind today: {wind_note}
+- 7-day risk trend: {risk_trend}
+
+{fire_alert_section}
+
+{alert_section}
+
+{fire_section}
 
 {peak_note}
 
-7-day fire risk timeline:
+7-DAY FIRE RISK TIMELINE:
 {json.dumps(risk_data, indent=2)}
 
-Return valid JSON only — no markdown, no text outside the array:
+Generate exactly 3 ranked recommendations. Return valid JSON only:
 [
   {{
     "rank": 1,
-    "action": "most urgent action the farmer should take NOW",
-    "reason": "why, referencing specific dates, alerts, drought level, or fire detections",
-    "urgency": "high"
+    "action": "specific action referencing actual data (dates, distances, measurements) — explain any technical term used",
+    "reason": "1-2 sentences: cite the exact data signal that makes this necessary — explain every technical term in plain English (e.g. 'VPD (Vapor Pressure Deficit — the gap between how much moisture the air could hold and how much it actually holds; high VPD means plants are losing moisture rapidly and become flammable) peaks at X kPa on [date], meaning vegetation can ignite from a single spark')",
+    "consequences": "1-2 sentences: what specifically happens to this farm, this crop, or these animals if this action is skipped — no jargon, be concrete about crop loss, structural damage, animal risk, or financial impact",
+    "urgency": "high",
+    "time_to_act": "within X hours / before [date]"
   }},
   {{
     "rank": 2,
     "action": "second action",
-    "reason": "why this matters based on the data",
-    "urgency": "medium"
+    "reason": "specific data-driven reason",
+    "consequences": "specific consequence if ignored",
+    "urgency": "medium",
+    "time_to_act": "within X hours / before [date]"
   }},
   {{
     "rank": 3,
     "action": "third action",
-    "reason": "why this matters based on the data",
-    "urgency": "low"
+    "reason": "specific data-driven reason",
+    "consequences": "specific consequence if ignored",
+    "urgency": "low",
+    "time_to_act": "within X hours / before [date]"
   }}
 ]
 
@@ -106,6 +193,8 @@ async def generate_llm_recommendations(
     risk_trend: str,
     weather_alerts: List[dict],
     nearby_fires: List[dict],
+    fire_approach_alert: dict | None,
+    wind_direction_deg: float | None,
     risk_timeline: List[DailyRisk],
 ) -> List[RecommendationItem]:
 
@@ -117,17 +206,22 @@ async def generate_llm_recommendations(
         risk_trend=risk_trend,
         weather_alerts=weather_alerts,
         nearby_fires=nearby_fires,
+        fire_approach_alert=fire_approach_alert,
+        wind_direction_deg=wind_direction_deg,
         risk_timeline=risk_timeline,
     )
 
     client = OpenAI(
-    base_url="https://router.huggingface.co/v1",
-    api_key=os.environ["HF_TOKEN"],
+        base_url="https://router.huggingface.co/v1",
+        api_key=os.environ["HF_TOKEN"],
     )
 
     completion = client.chat.completions.create(
         model=MODEL_NAME,
-        messages=[{"role": "user", "content": prompt}],
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
         temperature=0.2,
         max_tokens=1500,
     )
@@ -135,13 +229,24 @@ async def generate_llm_recommendations(
     raw_text = completion.choices[0].message.content
     print("Raw LLM response:", raw_text)
 
-    parsed_json = parse_llm_to_recommendations(raw_text)
-    return [RecommendationItem(**item) for item in parsed_json]
+    try:
+        parsed_json = parse_llm_to_recommendations(raw_text)
+        return [RecommendationItem(**item) for item in parsed_json]
+    except (ValueError, json.JSONDecodeError) as e:
+        print(f"JSON parse error: {e}. Returning fallback recommendations.")
+        return _fallback_recommendations()
+
+
+def _fallback_recommendations() -> list[RecommendationItem]:
+    return [
+        RecommendationItem(rank=1, action="Create defensible space by clearing dry vegetation within 30 feet of structures.", reason="Dry conditions and high wind increase fire spread risk near buildings.", consequences="Without a clear buffer, embers from a nearby fire can ignite structures directly. Once a structure catches, suppression without on-site water becomes nearly impossible.", urgency="high", time_to_act="within 24 hours"),
+        RecommendationItem(rank=2, action="Check and restock emergency water supply and fire suppression equipment.", reason="Drought conditions reduce available water sources for firefighting.", consequences="If a fire starts on the property with no suppression water available, the window to stop spread is measured in minutes. Waiting for fire services adds 15–30 minutes of uncontrolled burn time.", urgency="medium", time_to_act="within 48 hours"),
+        RecommendationItem(rank=3, action="Review evacuation routes and notify local fire authority of farm location.", reason="Early coordination with fire services reduces response time during an incident.", consequences="Farms without pre-registered locations are deprioritised during multi-incident responses. Unknown access routes delay fire crew arrival by 10–20 minutes.", urgency="low", time_to_act="within 72 hours"),
+    ]
 
 
 def parse_llm_to_recommendations(text: str) -> List[dict]:
     """Try multiple strategies to extract 3 recommendation dicts from raw LLM text."""
-
     # Strategy 1: well-formed JSON array
     start = text.find("[")
     end = text.rfind("]") + 1
@@ -161,7 +266,7 @@ def parse_llm_to_recommendations(text: str) -> List[dict]:
         except json.JSONDecodeError:
             pass
 
-    # Strategy 3: partial JSON array — try closing it with common suffixes
+    # Strategy 3: partial JSON — try closing it
     if start != -1:
         partial = cleaned[start:]
         for suffix in (']}', '}]', ']'):
@@ -172,7 +277,7 @@ def parse_llm_to_recommendations(text: str) -> List[dict]:
             except json.JSONDecodeError:
                 continue
 
-    # Strategy 4: free-text numbered items  (e.g. "1. Action: ...\nReason: ...\nUrgency: ...")
+    # Strategy 4: free-text numbered items
     urgency_map = {"high": "high", "medium": "medium", "low": "low",
                    "critical": "high", "moderate": "medium", "low-medium": "low"}
     items = re.split(r'\n\s*\d+[\.\)]\s*', text.strip())
@@ -181,17 +286,14 @@ def parse_llm_to_recommendations(text: str) -> List[dict]:
         action_m = re.search(r'(?:action|step|recommendation)[:\-]?\s*(.+)', block, re.I)
         reason_m = re.search(r'(?:reason|why|rationale)[:\-]?\s*(.+)', block, re.I)
         urgency_m = re.search(r'(?:urgency|priority)[:\-]?\s*(\w[\w\-]*)', block, re.I)
-
         action = action_m.group(1).strip() if action_m else block.split('\n')[0].strip()
         reason = reason_m.group(1).strip() if reason_m else "See risk data."
         raw_urg = urgency_m.group(1).lower() if urgency_m else "medium"
         urgency = urgency_map.get(raw_urg, "medium")
-
         if action:
-            results.append({"rank": i, "action": action, "reason": reason, "urgency": urgency})
+            results.append({"rank": i, "action": action, "reason": reason, "urgency": urgency, "time_to_act": "as soon as possible"})
 
-    if len(results) >= 1:
+    if results:
         return results
 
     raise ValueError("Could not extract recommendations from LLM response.")
-

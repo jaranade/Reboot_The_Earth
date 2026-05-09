@@ -13,6 +13,7 @@ async def fetch_weather(latitude: float, longitude: float) -> dict:
             "relative_humidity_2m_min",
             "wind_speed_10m_max",
             "precipitation_sum",
+            "wind_direction_10m_dominant",
         ]),
         "forecast_days": 7,
         "timezone": "auto",
