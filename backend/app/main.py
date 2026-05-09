@@ -4,11 +4,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.schemas import FarmProfile, RecommendationResponse
 from app.weather import fetch_weather
 from app.fire_index import build_risk_timeline
+from app.llm_service import generate_llm_recommendations
 
 
 app = FastAPI(
     title="Farm Fire Risk Advisor API",
-    version="0.2.0"
+    version="0.3.0"
 )
 
 app.add_middleware(
@@ -52,29 +53,20 @@ async def generate_recommendations(farm_profile: FarmProfile) -> RecommendationR
 
     risk_timeline = build_risk_timeline(weather_data)
 
+    drought_level = "D2 - Severe Drought"
+    ndvi_status = "Low vegetation moisture"
+
+    recommendations = await generate_llm_recommendations(
+        farm_profile=farm_profile,
+        drought_level=drought_level,
+        ndvi_status=ndvi_status,
+        risk_timeline=risk_timeline
+    )
+
     return RecommendationResponse(
         farm_profile=farm_profile,
-        drought_level="D2 - Severe Drought",
-        ndvi_status="Low vegetation moisture",
+        drought_level=drought_level,
+        ndvi_status=ndvi_status,
         risk_timeline=risk_timeline,
-        recommendations=[
-            {
-                "rank": 1,
-                "action": f"Inspect and clear dry vegetation around {farm_profile.crop_type} growing areas.",
-                "reason": "Dry vegetation near crop rows can increase ignition and fire spread risk.",
-                "urgency": "high"
-            },
-            {
-                "rank": 2,
-                "action": "Avoid operating spark-producing machinery during the hottest and windiest hours.",
-                "reason": "High wind and low humidity can make small ignitions spread quickly.",
-                "urgency": "high"
-            },
-            {
-                "rank": 3,
-                "action": "Prepare irrigation, water access points, and emergency contact procedures.",
-                "reason": "Prepared water access can reduce response time during elevated fire conditions.",
-                "urgency": "medium"
-            }
-        ]
+        recommendations=recommendations
     )
