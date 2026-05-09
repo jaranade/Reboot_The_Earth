@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import TopBar from './components/TopBar'
 import MapPane from './components/MapPane'
-import type { CircleState, FlyToTarget } from './components/MapPane'
+import type { CircleState, FlyToTarget, NearbyFireMarker } from './components/MapPane'
 import DetailPane from './components/DetailPane'
 import type { ApiResponse } from './components/DetailPane'
 import FarmerSurvey from './components/FarmerSurvey'
@@ -322,6 +322,7 @@ export default function App() {
             flyTo={flyTo}
             onCenterChange={handleCenterChange}
             onRadiusChange={handleRadiusChange}
+            fires={(apiData?.nearby_fires ?? []) as NearbyFireMarker[]}
           />
         </div>
         <div className="w-2/5 overflow-y-auto bg-slate-50">

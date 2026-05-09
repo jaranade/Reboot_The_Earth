@@ -21,6 +21,12 @@ Rules you must follow:
 - If a government weather alert (Red Flag Warning, Heat Advisory) is active, rank-1 must directly respond to it.
 - If fires are detected nearby, include distance and direction in the action.
 - Recommendations must be specific to the crop type and livestock status.
+- ALWAYS explain every technical term in plain English immediately after using it. Write as if talking to a farmer who has never seen a weather report. Examples:
+  - Instead of "VPD of 3.5 kPa" write "VPD (Vapor Pressure Deficit — the gap between how much moisture the air could hold and how much it actually holds; a high VPD means the air is pulling moisture out of plants, leaving them drier and more flammable) of 3.5 kPa, which means vegetation is under extreme drying stress and can ignite from a single spark"
+  - Instead of "FWI score of 28" write "FWI (Fire Weather Index — a 0–100 scale of how dangerous conditions are for fire) of 28, which is in the High range"
+  - Instead of "FRP of 1.2 MW" write "FRP (Fire Radiative Power — a satellite measure of how intensely a fire is burning) of 1.2 MW"
+  - Instead of "D3 drought" write "D3 Extreme Drought (the second-worst drought category, meaning soil is critically dry)"
+  - Instead of "kPa" write "kPa (kilopascals — a unit of pressure used to measure atmospheric dryness)"
 - Return valid JSON only — no markdown, no explanation outside the array."""
 
 CROP_CONTEXT = {
@@ -142,22 +148,25 @@ Generate exactly 3 ranked recommendations. Return valid JSON only:
 [
   {{
     "rank": 1,
-    "action": "specific action referencing actual data (dates, distances, measurements)",
-    "reason": "cite the exact data point that makes this urgent (e.g. 'VPD of X kPa', 'fire 18 km SW', 'Heat Advisory until May 11')",
+    "action": "specific action referencing actual data (dates, distances, measurements) — explain any technical term used",
+    "reason": "1-2 sentences: cite the exact data signal that makes this necessary — explain every technical term in plain English (e.g. 'VPD (Vapor Pressure Deficit — the gap between how much moisture the air could hold and how much it actually holds; high VPD means plants are losing moisture rapidly and become flammable) peaks at X kPa on [date], meaning vegetation can ignite from a single spark')",
+    "consequences": "1-2 sentences: what specifically happens to this farm, this crop, or these animals if this action is skipped — no jargon, be concrete about crop loss, structural damage, animal risk, or financial impact",
     "urgency": "high",
     "time_to_act": "within X hours / before [date]"
   }},
   {{
     "rank": 2,
     "action": "second action",
-    "reason": "specific reason with data",
+    "reason": "specific data-driven reason",
+    "consequences": "specific consequence if ignored",
     "urgency": "medium",
     "time_to_act": "within X hours / before [date]"
   }},
   {{
     "rank": 3,
     "action": "third action",
-    "reason": "specific reason with data",
+    "reason": "specific data-driven reason",
+    "consequences": "specific consequence if ignored",
     "urgency": "low",
     "time_to_act": "within X hours / before [date]"
   }}
@@ -213,14 +222,14 @@ async def generate_llm_recommendations(
         return [RecommendationItem(**item) for item in parsed_json]
     except (ValueError, json.JSONDecodeError) as e:
         print(f"JSON parse error: {e}. Returning fallback recommendations.")
-        return _fallback_recommendations(farm_profile)
+        return _fallback_recommendations()
 
 
-def _fallback_recommendations(farm_profile: FarmProfile) -> list[RecommendationItem]:
+def _fallback_recommendations() -> list[RecommendationItem]:
     return [
-        RecommendationItem(rank=1, action="Create defensible space by clearing dry vegetation within 30 feet of structures.", reason="Dry conditions and high wind increase fire spread risk near buildings.", urgency="high", time_to_act="within 24 hours"),
-        RecommendationItem(rank=2, action="Check and restock emergency water supply and fire suppression equipment.", reason="Drought conditions reduce available water sources for firefighting.", urgency="medium", time_to_act="within 48 hours"),
-        RecommendationItem(rank=3, action="Review evacuation routes and notify local fire authority of farm location.", reason="Early coordination with fire services reduces response time during an incident.", urgency="low", time_to_act="within 72 hours"),
+        RecommendationItem(rank=1, action="Create defensible space by clearing dry vegetation within 30 feet of structures.", reason="Dry conditions and high wind increase fire spread risk near buildings.", consequences="Without a clear buffer, embers from a nearby fire can ignite structures directly. Once a structure catches, suppression without on-site water becomes nearly impossible.", urgency="high", time_to_act="within 24 hours"),
+        RecommendationItem(rank=2, action="Check and restock emergency water supply and fire suppression equipment.", reason="Drought conditions reduce available water sources for firefighting.", consequences="If a fire starts on the property with no suppression water available, the window to stop spread is measured in minutes. Waiting for fire services adds 15–30 minutes of uncontrolled burn time.", urgency="medium", time_to_act="within 48 hours"),
+        RecommendationItem(rank=3, action="Review evacuation routes and notify local fire authority of farm location.", reason="Early coordination with fire services reduces response time during an incident.", consequences="Farms without pre-registered locations are deprioritised during multi-incident responses. Unknown access routes delay fire crew arrival by 10–20 minutes.", urgency="low", time_to_act="within 72 hours"),
     ]
 
 

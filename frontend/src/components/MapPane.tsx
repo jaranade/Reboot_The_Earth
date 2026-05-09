@@ -154,14 +154,29 @@ function FarmCircle({ center, radiusM, onCenterChange, onRadiusChange }: FarmCir
   )
 }
 
+const fireIcon = L.divIcon({
+  className: '',
+  html: `<div title="NASA FIRMS fire detection" style="font-size:20px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,.6));cursor:default">🔥</div>`,
+  iconSize: [20, 20],
+  iconAnchor: [10, 10],
+})
+
+export interface NearbyFireMarker {
+  latitude: number
+  longitude: number
+  frp: number
+  detection_date: string
+}
+
 interface MapPaneProps {
   circle: CircleState
   flyTo: FlyToTarget | null
   onCenterChange: (c: [number, number]) => void
   onRadiusChange: (r: number) => void
+  fires?: NearbyFireMarker[]
 }
 
-export default function MapPane({ circle, flyTo, onCenterChange, onRadiusChange }: MapPaneProps) {
+export default function MapPane({ circle, flyTo, onCenterChange, onRadiusChange, fires = [] }: MapPaneProps) {
   const acres = Math.round((Math.PI * circle.radiusM ** 2) / 4046.856)
 
   return (
@@ -177,6 +192,13 @@ export default function MapPane({ circle, flyTo, onCenterChange, onRadiusChange 
         />
         <MapInitView center={circle.center} radiusM={circle.radiusM} />
         <MapFlyTo target={flyTo} />
+        {fires.map((f, i) => (
+          <Marker
+            key={i}
+            position={[f.latitude, f.longitude]}
+            icon={fireIcon}
+          />
+        ))}
         <FarmCircle
           center={circle.center}
           radiusM={circle.radiusM}

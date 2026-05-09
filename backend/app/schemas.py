@@ -26,6 +26,7 @@ class RecommendationItem(BaseModel):
     rank: int
     action: str
     reason: str
+    consequences: str = ""
     urgency: str
     time_to_act: str = "as soon as possible"
 
