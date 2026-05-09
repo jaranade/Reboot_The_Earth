@@ -3,14 +3,13 @@ import TopBar from './components/TopBar'
 import MapPane from './components/MapPane'
 import type { CircleState, FlyToTarget } from './components/MapPane'
 import DetailPane from './components/DetailPane'
+import type { ApiResponse } from './components/DetailPane'
 import FarmerSurvey from './components/FarmerSurvey'
 import type { SurveyData } from './components/FarmerSurvey'
-import { mockResponses } from './mockData'
-import { formatSurvey } from './utils/formatSurvey'
 import EnvConditionsBar from './components/EnvConditionsBar'
 import type { EnvConditions } from './components/EnvConditionsBar'
 
-const DEFAULT_CENTER: [number, number] = [32.8801, -117.2340]
+const DEFAULT_CENTER: [number, number] = [32.8801, -117.234]
 const DEFAULT_RADIUS_M = 300
 
 function computeAcres(radiusM: number): string {
@@ -120,8 +119,9 @@ const EXAMPLE_STORIES: ExampleStory[] = [
 ]
 
 export default function App() {
-  const [persona] = useState('almond')
-  const [surveyComplete, setSurveyComplete] = useState(false)
+  const [apiData, setApiData] = useState<ApiResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [apiError, setApiError] = useState<string | null>(null)
   const [circle, setCircle] = useState<CircleState>({ center: DEFAULT_CENTER, radiusM: DEFAULT_RADIUS_M })
   const [geoAddress, setGeoAddress] = useState('')
   const [geoLoading, setGeoLoading] = useState(false)
@@ -133,8 +133,6 @@ export default function App() {
   const fromMap = useRef({ center: true, radius: false })
   const reverseGeocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const forwardGeocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const data = mockResponses[persona]
 
   useEffect(() => {
     if (!fromMap.current.center) return
@@ -197,15 +195,12 @@ export default function App() {
       }
 
       try {
-        // 1. Full address
         let hit = await nominatim(addr)
 
-        // 2. Strip leading house number (e.g. "1581 Sage Canyon Rd, …" → "Sage Canyon Rd, …")
         if (!hit) {
           hit = await nominatim(addr.replace(/^\d+\s+/, ''))
         }
 
-        // 3. City / state / zip only (everything after the first comma)
         if (!hit) {
           const afterFirstComma = addr.indexOf(',')
           if (afterFirstComma !== -1) {
@@ -232,29 +227,88 @@ export default function App() {
   }
 
   const loadStory = (story: ExampleStory) => {
-    // Set geo state directly — bypasses geocoding so the preset address/acres are preserved
     setGeoAddress(story.data.address)
     setGeoAcres(story.data.acreage)
     setCircle({ center: story.center, radiusM: story.radiusM })
     setFlyTo({ center: story.center, radiusM: story.radiusM })
     setFormPreset({ ...story.data })
     setActiveConditions(story.conditions)
-    setSurveyComplete(false)
+    setApiData(null)
   }
 
   const handleSurveySubmit = async (survey: SurveyData) => {
-    const profileText = formatSurvey(survey)
-    console.log('[FarmerSurvey] formatted profile:\n', profileText)
-    try {
-      await fetch('/api/profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: profileText,
-      })
-    } catch {
-      // backend not yet available; proceed anyway
+    setLoading(true)
+    setApiError(null)
+
+    const [lat, lng] = circle.center
+    const allCrops = [
+      ...survey.crops,
+      ...(survey.cropsOther.trim() ? [survey.cropsOther.trim()] : []),
+    ]
+
+    const farmProfile = {
+      location_name: survey.address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+      latitude: lat,
+      longitude: lng,
+      crop_type: allCrops.join(', ') || 'mixed crops',
+      livestock: survey.hasLivestock === 'Yes',
+      acres: parseFloat(survey.acreage) || null,
     }
-    setSurveyComplete(true)
+
+    try {
+      const res = await fetch('/api/recommendations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(farmProfile),
+      })
+      if (!res.ok) throw new Error(`Server error ${res.status}`)
+      const data: ApiResponse = await res.json()
+      setApiData(data)
+    } catch (e) {
+      setApiError(e instanceof Error ? e.message : 'Unknown error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const rightPane = () => {
+    if (loading) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-500">
+          <div className="w-8 h-8 border-4 border-orange-400 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm">Analyzing your farm profile…</p>
+        </div>
+      )
+    }
+    if (apiError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full gap-3 p-8 text-center">
+          <p className="text-sm font-semibold text-red-600">Could not reach the server</p>
+          <p className="text-xs text-slate-500">{apiError}</p>
+          <button
+            onClick={() => setApiError(null)}
+            className="mt-2 text-xs text-orange-600 hover:text-orange-700 font-medium underline"
+          >
+            ← Back to survey
+          </button>
+        </div>
+      )
+    }
+    if (apiData) {
+      return <DetailPane data={apiData} />
+    }
+    return (
+      <FarmerSurvey
+        onSubmit={handleSurveySubmit}
+        geoAddress={geoAddress}
+        geoAddressLoading={geoLoading}
+        geoAcres={geoAcres}
+        geoCoordinates={`${circle.center[0].toFixed(4)}, ${circle.center[1].toFixed(4)}`}
+        onAddressChange={handleFormAddressChange}
+        onAcresChange={handleFormAcresChange}
+        preset={formPreset}
+      />
+    )
   }
 
   return (
@@ -271,7 +325,6 @@ export default function App() {
           />
         </div>
         <div className="w-2/5 overflow-y-auto bg-slate-50">
-          {/* Example story quick-fill buttons */}
           <div className="flex items-center gap-2 px-4 pt-3 pb-1">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider shrink-0">
               Example Profiles
@@ -290,20 +343,7 @@ export default function App() {
             </div>
           </div>
 
-          {surveyComplete ? (
-            <DetailPane data={data} />
-          ) : (
-            <FarmerSurvey
-              onSubmit={handleSurveySubmit}
-              geoAddress={geoAddress}
-              geoAddressLoading={geoLoading}
-              geoAcres={geoAcres}
-              geoCoordinates={`${circle.center[0].toFixed(4)}, ${circle.center[1].toFixed(4)}`}
-              onAddressChange={handleFormAddressChange}
-              onAcresChange={handleFormAcresChange}
-              preset={formPreset}
-            />
-          )}
+          {rightPane()}
         </div>
       </div>
     </div>
