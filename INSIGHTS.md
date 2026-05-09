@@ -1,4 +1,4 @@
-# How FireSight's AI Insights Help Farmers
+# How FarmTAP's AI Insights Help Farmers
 
 ## The Problem with Generic Fire Alerts
 
@@ -6,7 +6,7 @@ Traditional fire alerts tell farmers that a Red Flag Warning is active. That's u
 
 > *"What should I do right now, on my specific farm, with my specific crops, before the worst day of this week?"*
 
-A wheat farmer in harvest season and a cattle rancher face completely different risks under the same weather conditions. FireSight closes that gap.
+A wheat farmer in harvest season and a cattle rancher face completely different risks under the same weather conditions. FarmTAP closes that gap.
 
 ---
 
@@ -14,7 +14,7 @@ A wheat farmer in harvest season and a cattle rancher face completely different 
 
 ### 1. Multi-Source Data Fusion
 
-FireSight doesn't rely on a single data feed. Every recommendation is built from six real-time sources pulled in parallel:
+FarmTAP doesn't rely on a single data feed. Every recommendation is built from six real-time sources pulled in parallel:
 
 | Source | What it provides |
 |--------|-----------------|
@@ -25,7 +25,7 @@ FireSight doesn't rely on a single data feed. Every recommendation is built from
 | **Open-Elevation** | Terrain elevation — fire spreads faster uphill |
 | **Computed: VPD** | Vapor Pressure Deficit from temp + humidity — the single best vegetation ignition predictor |
 
-No single alert service combines all of these. FireSight does it automatically for any location.
+No single alert service combines all of these. FarmTAP does it automatically for any location.
 
 ---
 
@@ -61,7 +61,7 @@ The LLM is given a knowledge block about the specific crop before generating rec
 - **Hay**: Among the fastest-spreading fire fuels. Baled hay near structures is an extreme structural hazard.
 - **Cattle**: Livestock evacuation is time-critical and requires trailer coordination with 48-hour lead time.
 
-Generic fire advice ignores all of this. FireSight's recommendations are framed around what the specific crop *loses* in a fire scenario.
+Generic fire advice ignores all of this. FarmTAP's recommendations are framed around what the specific crop *loses* in a fire scenario.
 
 ---
 
@@ -69,7 +69,7 @@ Generic fire advice ignores all of this. FireSight's recommendations are framed 
 
 When NASA FIRMS detects an active fire within 55 km:
 
-1. FireSight computes the exact distance (km) and compass direction from the farm
+1. FarmTAP computes the exact distance (km) and compass direction from the farm
 2. It checks whether today's wind is blowing from the fire toward the farm
 3. It estimates hours-to-farm-perimeter based on current risk level and typical chaparral spread rates
 
@@ -93,7 +93,7 @@ When NOAA issues a Red Flag Warning or Heat Advisory, the LLM is instructed that
 
 ## Why This Matters for Farmers
 
-A farmer checking FireSight at 6am on a High-risk day sees:
+A farmer checking FarmTAP at 6am on a High-risk day sees:
 
 - **Which specific days** are most dangerous (not just "elevated risk this week")
 - **Whether there is already a fire moving toward them** and from which direction
@@ -107,7 +107,7 @@ This is the difference between a weather alert and a farm-specific action plan.
 
 ## Validating the Data
 
-All data sources used by FireSight are public, citable, and independently verifiable:
+All data sources used by FarmTAP are public, citable, and independently verifiable:
 
 - **Fire detections**: Cross-reference at [NASA FIRMS Fire Map](https://firms.modaps.eosdis.nasa.gov/map/) — search by date and coordinates
 - **Drought classification**: [US Drought Monitor](https://droughtmonitor.unl.edu/) — enter location to see current D0–D4 status

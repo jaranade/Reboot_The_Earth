@@ -1,4 +1,4 @@
-# FireSight — Wildfire Risk Intelligence for Farmers
+# FarmTAP — Wildfire Risk Intelligence for Farmers
 
 A real-time wildfire risk assessment tool that fuses satellite fire data, government weather alerts, live environmental sensor readings, and a large language model to give farmers specific, actionable recommendations before a fire threatens their land.
 
@@ -8,7 +8,7 @@ Built for the San Diego UN Hackathon 2025 — Reboot The Earth.
 
 ## What It Does
 
-A farmer opens FireSight, draws a circle around their farm on a satellite map, fills in a short survey (crops, livestock, irrigation, structures), and submits. Within seconds they receive:
+A farmer opens FarmTAP, draws a circle around their farm on a satellite map, fills in a short survey (crops, livestock, irrigation, structures), and submits. Within seconds they receive:
 
 - A **7-day fire weather forecast** colour-coded by risk level
 - The **drought classification** for their exact location, derived from real soil moisture sensor data
@@ -86,7 +86,7 @@ A farmer opens FireSight, draws a circle around their farm on a satellite map, f
 
 ## Data Sources
 
-All data sources used by FireSight are **free, open, and publicly accessible**. No paid APIs.
+All data sources used by FarmTAP are **free, open, and publicly accessible**. No paid APIs.
 
 | Source | Data Provided | Auth Required |
 |--------|--------------|---------------|

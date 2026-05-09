@@ -25,11 +25,12 @@ def compute_vpd(temperature_c: float, humidity_percent: float) -> float:
 
 
 def classify_risk(score: float) -> str:
-    if score >= 35:
+    """Thresholds calibrated for fire-prone western US conditions."""
+    if score >= 28:
         return "Extreme"
-    if score >= 25:
+    if score >= 20:
         return "High"
-    if score >= 15:
+    if score >= 12:
         return "Moderate"
     return "Low"
 
