@@ -1,6 +1,7 @@
 import csv
 import io
 import os
+from typing import List, Optional
 
 import httpx
 
@@ -43,7 +44,7 @@ async def fetch_environmental_conditions(latitude: float, longitude: float) -> d
     }
 
 
-def _classify_ndvi(soil_moisture: float | None) -> str:
+def _classify_ndvi(soil_moisture: Optional[float]) -> str:
     if soil_moisture is None:
         return "Vegetation moisture data unavailable"
     if soil_moisture < 0.05:
@@ -55,7 +56,7 @@ def _classify_ndvi(soil_moisture: float | None) -> str:
     return "Adequate vegetation moisture"
 
 
-def _classify_drought(soil_moisture: float | None) -> str:
+def _classify_drought(soil_moisture: Optional[float]) -> str:
     if soil_moisture is None:
         return "Drought data unavailable"
     if soil_moisture < 0.05:
@@ -71,7 +72,7 @@ def _classify_drought(soil_moisture: float | None) -> str:
     return "No Drought Conditions"
 
 
-async def fetch_nearby_fires(latitude: float, longitude: float, days: int = 1) -> list[dict]:
+async def fetch_nearby_fires(latitude: float, longitude: float, days: int = 1) -> List[dict]:
     """
     NASA FIRMS VIIRS active fire detections within ~55 km of the farm.
     Requires FIRMS_API_KEY in environment.
@@ -112,7 +113,7 @@ async def fetch_nearby_fires(latitude: float, longitude: float, days: int = 1) -
         return []
 
 
-async def fetch_elevation(latitude: float, longitude: float) -> float | None:
+async def fetch_elevation(latitude: float, longitude: float) -> Optional[float]:
     """Open-Elevation API — free, no auth required."""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -127,7 +128,7 @@ async def fetch_elevation(latitude: float, longitude: float) -> float | None:
         return None
 
 
-async def fetch_weather_alerts(latitude: float, longitude: float) -> list[dict]:
+async def fetch_weather_alerts(latitude: float, longitude: float) -> List[dict]:
     """
     NOAA Weather Alerts API — free, no auth required.
     Returns active alerts including Red Flag Warnings and Fire Weather Watches.

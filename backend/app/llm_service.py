@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from typing import List, Optional
 from dotenv import load_dotenv
 from openai import OpenAI
 
@@ -61,13 +62,13 @@ def build_llm_prompt(
     farm_profile: FarmProfile,
     drought_level: str,
     ndvi_status: str,
-    elevation_m: float | None,
+    elevation_m: Optional[float],
     risk_trend: str,
-    weather_alerts: list[dict],
-    nearby_fires: list[dict],
+    weather_alerts: List[dict],
+    nearby_fires: List[dict],
     fire_approach_alert: dict | None,
     wind_direction_deg: float | None,
-    risk_timeline: list[DailyRisk],
+    risk_timeline: List[DailyRisk],
 ) -> str:
     risk_data = [item.model_dump() for item in risk_timeline]
 
@@ -117,9 +118,14 @@ def build_llm_prompt(
     crop_context = _get_crop_context(farm_profile.crop_type)
     livestock_note = "Livestock present — evacuation routes for animals must be included in any emergency planning." if farm_profile.livestock else "No livestock."
 
+    farm_section = (
+        f"Detailed farm survey:\n{farm_profile.farm_context}"
+        if farm_profile.farm_context
+        else f"Farm profile:\n{farm_profile.model_dump_json(indent=2)}"
+    )
+
     return f"""
-FARM PROFILE:
-{farm_profile.model_dump_json(indent=2)}
+{farm_section}
 
 CROP-SPECIFIC RISK CONTEXT:
 {crop_context}
@@ -170,21 +176,27 @@ Generate exactly 3 ranked recommendations. Return valid JSON only:
     "urgency": "low",
     "time_to_act": "within X hours / before [date]"
   }}
-]"""
+]
+
+Rules:
+- JSON only. No markdown. No text outside the array.
+- If government alerts are present, the rank-1 action must respond to them directly.
+- Reference specific crop type, growth stage, harvest timing, irrigation capability, livestock details, structures at risk, worker safety, peak dates, and any active alerts when available.
+"""
 
 
 async def generate_llm_recommendations(
     farm_profile: FarmProfile,
     drought_level: str,
     ndvi_status: str,
-    elevation_m: float | None,
+    elevation_m: Optional[float],
     risk_trend: str,
-    weather_alerts: list[dict],
-    nearby_fires: list[dict],
+    weather_alerts: List[dict],
+    nearby_fires: List[dict],
     fire_approach_alert: dict | None,
     wind_direction_deg: float | None,
-    risk_timeline: list[DailyRisk],
-) -> list[RecommendationItem]:
+    risk_timeline: List[DailyRisk],
+) -> List[RecommendationItem]:
 
     prompt = build_llm_prompt(
         farm_profile=farm_profile,
@@ -233,7 +245,8 @@ def _fallback_recommendations() -> list[RecommendationItem]:
     ]
 
 
-def parse_llm_to_recommendations(text: str) -> list[dict]:
+def parse_llm_to_recommendations(text: str) -> List[dict]:
+    """Try multiple strategies to extract 3 recommendation dicts from raw LLM text."""
     # Strategy 1: well-formed JSON array
     start = text.find("[")
     end = text.rfind("]") + 1

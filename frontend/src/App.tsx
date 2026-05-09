@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { formatSurvey } from './utils/formatSurvey'
 import TopBar from './components/TopBar'
 import MapPane from './components/MapPane'
 import type { CircleState, FlyToTarget, NearbyFireMarker } from './components/MapPane'
@@ -253,6 +254,7 @@ export default function App() {
       crop_type: allCrops.join(', ') || 'mixed crops',
       livestock: survey.hasLivestock === 'Yes',
       acres: parseFloat(survey.acreage) || null,
+      farm_context: formatSurvey(survey),
     }
 
     try {

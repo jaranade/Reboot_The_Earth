@@ -1,4 +1,5 @@
 import math
+from typing import List
 
 from app.schemas import DailyRisk
 
@@ -33,7 +34,7 @@ def classify_risk(score: float) -> str:
     return "Low"
 
 
-def build_risk_timeline(weather_data: dict) -> list[DailyRisk]:
+def build_risk_timeline(weather_data: dict) -> List[DailyRisk]:
     daily = weather_data["daily"]
     timeline = []
     for i, date in enumerate(daily["time"]):
@@ -55,7 +56,8 @@ def build_risk_timeline(weather_data: dict) -> list[DailyRisk]:
     return timeline
 
 
-def compute_risk_trend(timeline: list[DailyRisk]) -> str:
+def compute_risk_trend(timeline: List[DailyRisk]) -> str:
+    """Compare first-half vs second-half average FWI to describe the risk trajectory."""
     if len(timeline) < 4:
         return "Insufficient data for trend analysis."
     mid = len(timeline) // 2
