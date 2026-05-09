@@ -3,12 +3,11 @@ import TopBar from './components/TopBar'
 import MapPane from './components/MapPane'
 import type { CircleState } from './components/MapPane'
 import DetailPane from './components/DetailPane'
+import type { ApiResponse } from './components/DetailPane'
 import FarmerSurvey from './components/FarmerSurvey'
 import type { SurveyData } from './components/FarmerSurvey'
-import { mockResponses } from './mockData'
-import { formatSurvey } from './utils/formatSurvey'
 
-const DEFAULT_CENTER: [number, number] = [32.8801, -117.2340]
+const DEFAULT_CENTER: [number, number] = [32.8801, -117.234]
 const DEFAULT_RADIUS_M = 300
 
 function computeAcres(radiusM: number): string {
@@ -16,8 +15,9 @@ function computeAcres(radiusM: number): string {
 }
 
 export default function App() {
-  const [persona, setPersona] = useState('almond')
-  const [surveyComplete, setSurveyComplete] = useState(false)
+  const [apiData, setApiData] = useState<ApiResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [apiError, setApiError] = useState<string | null>(null)
   const [circle, setCircle] = useState<CircleState>({ center: DEFAULT_CENTER, radiusM: DEFAULT_RADIUS_M })
   const [geoAddress, setGeoAddress] = useState('')
   const [geoLoading, setGeoLoading] = useState(false)
@@ -29,8 +29,6 @@ export default function App() {
   const fromMap = useRef({ center: true, radius: false })
   const reverseGeocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const forwardGeocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const data = mockResponses[persona]
 
   // Reverse-geocode the circle center only when it was moved on the map
   useEffect(() => {
@@ -113,23 +111,82 @@ export default function App() {
   }
 
   const handleSurveySubmit = async (survey: SurveyData) => {
-    const profileText = formatSurvey(survey)
-    console.log('[FarmerSurvey] formatted profile:\n', profileText)
-    try {
-      await fetch('/api/profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: profileText,
-      })
-    } catch {
-      // backend not yet available; proceed anyway
+    setLoading(true)
+    setApiError(null)
+
+    const [lat, lng] = circle.center
+    const allCrops = [
+      ...survey.crops,
+      ...(survey.cropsOther.trim() ? [survey.cropsOther.trim()] : []),
+    ]
+
+    const farmProfile = {
+      location_name: survey.address || `${lat.toFixed(5)}, ${lng.toFixed(5)}`,
+      latitude: lat,
+      longitude: lng,
+      crop_type: allCrops.join(', ') || 'mixed crops',
+      livestock: survey.hasLivestock === 'Yes',
+      acres: parseFloat(survey.acreage) || null,
     }
-    setSurveyComplete(true)
+
+    try {
+      const res = await fetch('/api/recommendations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(farmProfile),
+      })
+      if (!res.ok) throw new Error(`Server error ${res.status}`)
+      const data: ApiResponse = await res.json()
+      setApiData(data)
+    } catch (e) {
+      setApiError(e instanceof Error ? e.message : 'Unknown error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const rightPane = () => {
+    if (loading) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-500">
+          <div className="w-8 h-8 border-4 border-orange-400 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm">Analyzing your farm profile…</p>
+        </div>
+      )
+    }
+    if (apiError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full gap-3 p-8 text-center">
+          <p className="text-sm font-semibold text-red-600">Could not reach the server</p>
+          <p className="text-xs text-slate-500">{apiError}</p>
+          <button
+            onClick={() => setApiError(null)}
+            className="mt-2 text-xs text-orange-600 hover:text-orange-700 font-medium underline"
+          >
+            ← Back to survey
+          </button>
+        </div>
+      )
+    }
+    if (apiData) {
+      return <DetailPane data={apiData} />
+    }
+    return (
+      <FarmerSurvey
+        onSubmit={handleSurveySubmit}
+        geoAddress={geoAddress}
+        geoAddressLoading={geoLoading}
+        geoAcres={geoAcres}
+        geoCoordinates={`${circle.center[0].toFixed(4)}, ${circle.center[1].toFixed(4)}`}
+        onAddressChange={handleFormAddressChange}
+        onAcresChange={handleFormAcresChange}
+      />
+    )
   }
 
   return (
     <div className="flex flex-col h-screen">
-      <TopBar persona={persona} onPersonaChange={setPersona} />
+      <TopBar />
       <div className="flex flex-1 overflow-hidden">
         <div className="w-3/5">
           <MapPane
@@ -140,19 +197,7 @@ export default function App() {
           />
         </div>
         <div className="w-2/5 overflow-y-auto bg-slate-50">
-          {surveyComplete ? (
-            <DetailPane data={data} />
-          ) : (
-            <FarmerSurvey
-              onSubmit={handleSurveySubmit}
-              geoAddress={geoAddress}
-              geoAddressLoading={geoLoading}
-              geoAcres={geoAcres}
-              geoCoordinates={`${circle.center[0].toFixed(4)}, ${circle.center[1].toFixed(4)}`}
-              onAddressChange={handleFormAddressChange}
-              onAcresChange={handleFormAcresChange}
-            />
-          )}
+          {rightPane()}
         </div>
       </div>
     </div>
