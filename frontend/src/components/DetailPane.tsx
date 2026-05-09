@@ -109,9 +109,34 @@ function fmtShortDate(iso: string) {
   return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' })
 }
 
-function peakRisk(timeline: ApiDailyRisk[]): string {
+function peakRisk(
+  timeline: ApiDailyRisk[],
+  alerts: ApiWeatherAlert[],
+  fireAlert: ApiFireApproachAlert | null | undefined,
+): string {
   const order: Record<string, number> = { Low: 1, Moderate: 2, High: 3, Extreme: 4 }
-  return timeline.reduce((max, d) => (order[d.risk_level] ?? 0) > (order[max] ?? 0) ? d.risk_level : max, 'Low')
+  const bump = (current: string, floor: string) =>
+    order[floor] > order[current] ? floor : current
+
+  let peak = timeline.reduce(
+    (max, d) => (order[d.risk_level] ?? 0) > (order[max] ?? 0) ? d.risk_level : max,
+    'Low',
+  )
+
+  // Any active government alert → minimum Moderate
+  if (alerts.length > 0) peak = bump(peak, 'Moderate')
+
+  // Red Flag Warning or Fire Weather Watch → minimum High
+  const fireWeatherKeywords = ['red flag', 'fire weather', 'fire warning']
+  if (alerts.some(a => fireWeatherKeywords.some(k => a.event.toLowerCase().includes(k))))
+    peak = bump(peak, 'High')
+
+  // Fire approach alert overrides
+  if (fireAlert?.level === 'WATCH')   peak = bump(peak, 'Moderate')
+  if (fireAlert?.level === 'WARNING') peak = bump(peak, 'High')
+  if (fireAlert?.level === 'SEVERE')  peak = bump(peak, 'Extreme')
+
+  return peak
 }
 
 // ---------- sub-components ----------
@@ -437,9 +462,10 @@ function RecommendationCard({ rec }: { rec: ApiRecommendation }) {
 // ---------- main export ----------
 
 export default function DetailPane({ data }: { data: ApiResponse }) {
-  const peak = peakRisk(data.risk_timeline)
   const alerts = data.weather_alerts ?? []
   const fires = data.nearby_fires ?? []
+  const fireAlert = data.fire_approach_alert
+  const peak = peakRisk(data.risk_timeline, alerts, fireAlert)
 
   return (
     <div className="flex flex-col gap-4 pb-6">

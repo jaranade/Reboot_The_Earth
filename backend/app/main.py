@@ -16,8 +16,8 @@ from app.environmental import (
 
 
 app = FastAPI(
-    title="Farm Fire Risk Advisor API",
-    version="0.6.0"
+    title="FarmTAP API",
+    version="1.0.0"
 )
 
 app.add_middleware(

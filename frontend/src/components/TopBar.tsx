@@ -8,7 +8,7 @@ export default function TopBar() {
           <Flame className="w-5 h-5 text-white" />
         </div>
         <div className="flex flex-col leading-none">
-          <span className="text-white font-black text-lg tracking-tight">FIRESIGHT</span>
+          <span className="text-white font-black text-lg tracking-tight">FarmTAP</span>
           <span className="text-slate-400 text-xs tracking-wide mt-0.5">Wildfire Risk Intelligence for Farmers</span>
         </div>
       </div>
