@@ -9,6 +9,7 @@ class FarmProfile(BaseModel):
     crop_type: str = Field(example="almonds")
     livestock: bool = Field(example=False)
     acres: Optional[float] = Field(default=None, example=40)
+    farm_context: Optional[str] = Field(default=None)
 
 
 class DailyRisk(BaseModel):

@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from typing import List, Optional
 from dotenv import load_dotenv
 from openai import OpenAI
 
@@ -15,11 +16,11 @@ def build_llm_prompt(
     farm_profile: FarmProfile,
     drought_level: str,
     ndvi_status: str,
-    elevation_m: float | None,
+    elevation_m: Optional[float],
     risk_trend: str,
-    weather_alerts: list[dict],
-    nearby_fires: list[dict],
-    risk_timeline: list[DailyRisk],
+    weather_alerts: List[dict],
+    nearby_fires: List[dict],
+    risk_timeline: List[DailyRisk],
 ) -> str:
     risk_data = [item.model_dump() for item in risk_timeline]
 
@@ -44,11 +45,16 @@ def build_llm_prompt(
         if peak_days else "No high or extreme risk days forecast."
     )
 
+    farm_section = (
+        f"Detailed farm survey:\n{farm_profile.farm_context}"
+        if farm_profile.farm_context
+        else f"Farm profile:\n{farm_profile.model_dump_json(indent=2)}"
+    )
+
     return f"""
 You are a wildfire risk advisor for farmers. Use ALL data below to generate exactly 3 ranked, forward-looking action recommendations.
 
-Farm profile:
-{farm_profile.model_dump_json(indent=2)}
+{farm_section}
 
 Elevation: {elevation_note}
 Drought level: {drought_level}
@@ -88,7 +94,7 @@ Return valid JSON only — no markdown, no text outside the array:
 Rules:
 - JSON only. No markdown. No text outside the array.
 - If government alerts are present, the rank-1 action must respond to them directly.
-- Reference specific crop type, livestock, peak dates, and any active alerts.
+- Reference specific crop type, growth stage, harvest timing, irrigation capability, livestock details, structures at risk, worker safety, peak dates, and any active alerts when available.
 """
 
 
@@ -96,12 +102,12 @@ async def generate_llm_recommendations(
     farm_profile: FarmProfile,
     drought_level: str,
     ndvi_status: str,
-    elevation_m: float | None,
+    elevation_m: Optional[float],
     risk_trend: str,
-    weather_alerts: list[dict],
-    nearby_fires: list[dict],
-    risk_timeline: list[DailyRisk],
-) -> list[RecommendationItem]:
+    weather_alerts: List[dict],
+    nearby_fires: List[dict],
+    risk_timeline: List[DailyRisk],
+) -> List[RecommendationItem]:
 
     prompt = build_llm_prompt(
         farm_profile=farm_profile,
@@ -133,7 +139,7 @@ async def generate_llm_recommendations(
     return [RecommendationItem(**item) for item in parsed_json]
 
 
-def parse_llm_to_recommendations(text: str) -> list[dict]:
+def parse_llm_to_recommendations(text: str) -> List[dict]:
     """Try multiple strategies to extract 3 recommendation dicts from raw LLM text."""
 
     # Strategy 1: well-formed JSON array
