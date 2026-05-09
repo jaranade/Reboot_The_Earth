@@ -17,6 +17,7 @@ class DailyRisk(BaseModel):
     humidity_min_percent: float
     wind_max_kmh: float
     precipitation_mm: float
+    vpd_kpa: float
     fire_weather_index: float
     risk_level: str
 
@@ -26,6 +27,7 @@ class RecommendationItem(BaseModel):
     action: str
     reason: str
     urgency: str
+    time_to_act: str = "as soon as possible"
 
 
 class NearbyFire(BaseModel):
@@ -43,12 +45,22 @@ class WeatherAlert(BaseModel):
     expires: str
 
 
+class FireApproachAlert(BaseModel):
+    level: str
+    distance_km: float
+    direction: str
+    estimated_hours_to_farm: float
+    wind_pushing_toward_farm: bool
+    message: str
+
+
 class RecommendationResponse(BaseModel):
     farm_profile: FarmProfile
     drought_level: str
     ndvi_status: str
     elevation_m: Optional[float]
     risk_trend: str
+    fire_approach_alert: Optional[FireApproachAlert]
     weather_alerts: List[WeatherAlert]
     nearby_fires: List[NearbyFire]
     risk_timeline: List[DailyRisk]
