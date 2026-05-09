@@ -1,15 +1,23 @@
+import asyncio
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.schemas import FarmProfile, RecommendationResponse
+from app.schemas import FarmProfile, NearbyFire, WeatherAlert, RecommendationResponse
 from app.weather import fetch_weather
-from app.fire_index import build_risk_timeline
+from app.fire_index import build_risk_timeline, compute_risk_trend
 from app.llm_service import generate_llm_recommendations
+from app.environmental import (
+    fetch_environmental_conditions,
+    fetch_nearby_fires,
+    fetch_elevation,
+    fetch_weather_alerts,
+)
 
 
 app = FastAPI(
     title="Farm Fire Risk Advisor API",
-    version="0.3.0"
+    version="0.5.0"
 )
 
 app.add_middleware(
@@ -36,7 +44,6 @@ async def get_demo_recommendations():
         livestock=False,
         acres=40
     )
-
     return await generate_recommendations(demo_profile)
 
 
@@ -46,27 +53,42 @@ async def create_recommendations(farm_profile: FarmProfile):
 
 
 async def generate_recommendations(farm_profile: FarmProfile) -> RecommendationResponse:
-    weather_data = await fetch_weather(
-        farm_profile.latitude,
-        farm_profile.longitude
+    lat, lon = farm_profile.latitude, farm_profile.longitude
+
+    weather_data, env_conditions, fires_raw, elevation_m, alerts_raw = await asyncio.gather(
+        fetch_weather(lat, lon),
+        fetch_environmental_conditions(lat, lon),
+        fetch_nearby_fires(lat, lon),
+        fetch_elevation(lat, lon),
+        fetch_weather_alerts(lat, lon),
     )
 
     risk_timeline = build_risk_timeline(weather_data)
-
-    drought_level = "D2 - Severe Drought"
-    ndvi_status = "Low vegetation moisture"
+    risk_trend = compute_risk_trend(risk_timeline)
+    drought_level = env_conditions["drought_level"]
+    ndvi_status = env_conditions["ndvi_status"]
+    nearby_fires = [NearbyFire(**f) for f in fires_raw]
+    weather_alerts = [WeatherAlert(**a) for a in alerts_raw]
 
     recommendations = await generate_llm_recommendations(
         farm_profile=farm_profile,
         drought_level=drought_level,
         ndvi_status=ndvi_status,
-        risk_timeline=risk_timeline
+        elevation_m=elevation_m,
+        risk_trend=risk_trend,
+        weather_alerts=alerts_raw,
+        nearby_fires=fires_raw,
+        risk_timeline=risk_timeline,
     )
 
     return RecommendationResponse(
         farm_profile=farm_profile,
         drought_level=drought_level,
         ndvi_status=ndvi_status,
+        elevation_m=elevation_m,
+        risk_trend=risk_trend,
+        weather_alerts=weather_alerts,
+        nearby_fires=nearby_fires,
         risk_timeline=risk_timeline,
-        recommendations=recommendations
+        recommendations=recommendations,
     )

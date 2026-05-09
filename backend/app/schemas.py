@@ -28,9 +28,28 @@ class RecommendationItem(BaseModel):
     urgency: str
 
 
+class NearbyFire(BaseModel):
+    latitude: float
+    longitude: float
+    detection_date: str
+    confidence: str
+    frp: float
+
+
+class WeatherAlert(BaseModel):
+    event: str
+    severity: str
+    headline: str
+    expires: str
+
+
 class RecommendationResponse(BaseModel):
     farm_profile: FarmProfile
     drought_level: str
     ndvi_status: str
+    elevation_m: Optional[float]
+    risk_trend: str
+    weather_alerts: List[WeatherAlert]
+    nearby_fires: List[NearbyFire]
     risk_timeline: List[DailyRisk]
     recommendations: List[RecommendationItem]

@@ -15,54 +15,80 @@ def build_llm_prompt(
     farm_profile: FarmProfile,
     drought_level: str,
     ndvi_status: str,
-    risk_timeline: list[DailyRisk]
+    elevation_m: float | None,
+    risk_trend: str,
+    weather_alerts: list[dict],
+    nearby_fires: list[dict],
+    risk_timeline: list[DailyRisk],
 ) -> str:
     risk_data = [item.model_dump() for item in risk_timeline]
 
-    return f"""
-You are a wildfire risk advisor for farmers.
+    elevation_note = f"{elevation_m:.0f} m above sea level" if elevation_m is not None else "Unknown"
 
-Use the farm profile and environmental risk data to generate exactly 3 ranked action recommendations.
+    fire_summary = (
+        f"{len(nearby_fires)} active satellite fire detection(s) within ~55 km in the last 24 hours."
+        if nearby_fires else "No active fires detected within ~55 km."
+    )
+
+    if weather_alerts:
+        alert_lines = "\n".join(
+            f"- {a['event']} ({a['severity']}): {a['headline']}" for a in weather_alerts
+        )
+        alert_summary = f"ACTIVE GOVERNMENT WEATHER ALERTS:\n{alert_lines}"
+    else:
+        alert_summary = "No active government weather alerts for this location."
+
+    peak_days = [d for d in risk_data if d["risk_level"] in ("High", "Extreme")]
+    peak_note = (
+        f"Peak risk days: {', '.join(d['date'] for d in peak_days)}. Farmer must act BEFORE these dates."
+        if peak_days else "No high or extreme risk days forecast."
+    )
+
+    return f"""
+You are a wildfire risk advisor for farmers. Use ALL data below to generate exactly 3 ranked, forward-looking action recommendations.
 
 Farm profile:
 {farm_profile.model_dump_json(indent=2)}
 
-Drought level:
-{drought_level}
+Elevation: {elevation_note}
+Drought level: {drought_level}
+Vegetation moisture: {ndvi_status}
+7-day risk trend: {risk_trend}
+Nearby fire activity: {fire_summary}
 
-NDVI status:
-{ndvi_status}
+{alert_summary}
+
+{peak_note}
 
 7-day fire risk timeline:
 {json.dumps(risk_data, indent=2)}
 
-Return valid JSON only in this exact format:
+Return valid JSON only — no markdown, no text outside the array:
 [
   {{
     "rank": 1,
-    "action": "specific action the farmer should take",
-    "reason": "why this matters based on the data",
+    "action": "most urgent action the farmer should take NOW",
+    "reason": "why, referencing specific dates, alerts, drought level, or fire detections",
     "urgency": "high"
   }},
   {{
     "rank": 2,
-    "action": "specific action the farmer should take",
+    "action": "second action",
     "reason": "why this matters based on the data",
     "urgency": "medium"
   }},
   {{
     "rank": 3,
-    "action": "specific action the farmer should take",
+    "action": "third action",
     "reason": "why this matters based on the data",
     "urgency": "low"
   }}
 ]
 
 Rules:
-- Return JSON only.
-- Do not include markdown.
-- Do not include explanations outside JSON.
-- Make recommendations specific to crop type, livestock status, weather, drought, and vegetation.
+- JSON only. No markdown. No text outside the array.
+- If government alerts are present, the rank-1 action must respond to them directly.
+- Reference specific crop type, livestock, peak dates, and any active alerts.
 """
 
 
@@ -70,14 +96,22 @@ async def generate_llm_recommendations(
     farm_profile: FarmProfile,
     drought_level: str,
     ndvi_status: str,
-    risk_timeline: list[DailyRisk]
+    elevation_m: float | None,
+    risk_trend: str,
+    weather_alerts: list[dict],
+    nearby_fires: list[dict],
+    risk_timeline: list[DailyRisk],
 ) -> list[RecommendationItem]:
 
     prompt = build_llm_prompt(
         farm_profile=farm_profile,
         drought_level=drought_level,
         ndvi_status=ndvi_status,
-        risk_timeline=risk_timeline
+        elevation_m=elevation_m,
+        risk_trend=risk_trend,
+        weather_alerts=weather_alerts,
+        nearby_fires=nearby_fires,
+        risk_timeline=risk_timeline,
     )
 
     client = OpenAI(
