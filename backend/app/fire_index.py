@@ -59,3 +59,18 @@ def build_risk_timeline(weather_data: dict) -> list[DailyRisk]:
         )
 
     return timeline
+
+
+def compute_risk_trend(timeline: list[DailyRisk]) -> str:
+    """Compare first-half vs second-half average FWI to describe the risk trajectory."""
+    if len(timeline) < 4:
+        return "Insufficient data for trend analysis."
+    mid = len(timeline) // 2
+    first_avg = sum(d.fire_weather_index for d in timeline[:mid]) / mid
+    second_avg = sum(d.fire_weather_index for d in timeline[mid:]) / (len(timeline) - mid)
+    delta = second_avg - first_avg
+    if delta > 3:
+        return f"Worsening — fire risk is trending upward (avg FWI rising by {delta:.1f} over the week)."
+    if delta < -3:
+        return f"Improving — fire risk is trending downward (avg FWI dropping by {abs(delta):.1f} over the week)."
+    return f"Stable — fire risk is relatively consistent across the 7-day forecast (avg FWI change: {delta:+.1f})."
